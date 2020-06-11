@@ -27,10 +27,17 @@
 							<a class="nav-link" href="#">
 								<!-- <img src="@/assets/icon/rectangles.svg" alt=""> -->
 								<!-- <users-icon size="1.5x" class="custom-class"></users-icon> -->
-								<span class="ml-2">Minhas vagas</span>
+								<span class="ml-2">Meu estacionamento</span>
 							</a>
 			      </li>
-						<li v-if="user && user.type != 'driver'" @click="showGarage = true" class="nav-item">
+            <li v-if="user && user.type != 'driver'" @click="showManageBooking = true" class="nav-item">
+							<a class="nav-link" href="#">
+								<!-- <img src="@/assets/icon/rectangles.svg" alt=""> -->
+								<!-- <users-icon size="1.5x" class="custom-class"></users-icon> -->
+								<span class="ml-2">Gerenciamento de vagas</span>
+							</a>
+			      </li>
+						<!-- <li v-if="user && user.type != 'driver'" @click="showGarage = true" class="nav-item">
 							<a class="nav-link" href="#">
 								<span class="ml-2">Garagem</span>
 							</a>
@@ -39,7 +46,7 @@
 							<a class="nav-link" href="#">
 								<span class="ml-2">Tabela de Preços</span>
 							</a>
-						</li>
+						</li> -->
 			    </ul>
 			  </div>
 
@@ -59,11 +66,12 @@
 					</div>
 					<span v-else class="px-2 pr-0">Entrar / Cadastrar</span>
 				</div>
+				
 			</nav>
       <main class="h-100 w-100 bg-dark">
 				<GmapMap
 					ref="mapRef"
-				  :center="currentPosition"
+				  :center="this.currentPosition"
 				  :zoom="zoom"
 				  @zoom_changed="zoomChanged"
 				  map-type-id="roadmap"
@@ -75,46 +83,41 @@
 				    :position="m.position"
 				    :clickable="true"
 				    :draggable="true"
-				    @click="center=m.position"
+					:icon="m.icon"
+				    @click="center=m.position; selectParking(m.id);"
 				  />
 				  <GmapCircle
-					:center="currentPosition"					
+					:center="this.currentPosition"					
 					:visible="true"
 					:radius="circle_radius"
 					:options="{fillColor:'white',fillOpacity:1, strokeWeight:0.5}"					
 					></GmapCircle>
 				</GmapMap>
-				<!-- :radius="2"
-					:options="{fillColor:'white',fillOpacity:1, strokeWeight:0.5}" -->
-				<!-- <GmapInfoWindow
-					:key="index"
-					v-for="(i, index) in infos"
-					:position="i.position"
-					:content="i.content"
-				/> -->
-      </main>
+
+    		
+		</main>
+		<modal v-show="isModalVisible" @close="showModal" 
+			:parking="this.selectedParking" :user="this.user" :token="this.token" />
     </div>
-    <Login @close="showLogin = false" @logged="logged" v-if="showLogin" class="login-container h-100 w-100"></Login>
-    <VehicleList @close="showVehicleList = false" v-if="showVehicleList" :userId="this.user.id" class="vehicle-list-container h-100 w-100"></VehicleList>
-    <SpotList @close="showSpotList = false" v-if="showSpotList" :userId="this.user.id" class="vehicle-list-container h-100 w-100"></SpotList>
-    <Garage @close="showGarage = false" v-if="showGarage" :userId="this.user.id" class="vehicle-list-container h-100 w-100"></Garage>
-		<PriceTable @close="showPriceTable = false" v-if="showPriceTable" :userId="this.user.id" class="vehicle-list-container h-100 w-100"></PriceTable>
+    <VehicleList @close="showVehicleList = false" v-if="showVehicleList" :token="this.token" :user="this.user" class="custom-container h-100 w-100"></VehicleList>
+    <Login @close="showLogin = false" @logged="logged" v-if="showLogin" class="custom-container h-100 w-100"></Login>
+    <ManageBooking @close="showManageBooking = false" v-if="showManageBooking" :token="this.token" :user="this.user" class="custom-container h-100 w-100" />
+    <SpotList @close="showSpotList = false" v-if="showSpotList" :token="this.token" :user="this.user" class="custom-container h-100 w-100" />
 	</div>
 </template>
 
 <script>
 // @ is an alias to /src
 import { UserIcon } from 'vue-feather-icons';
-
 import navbar from '@/components/Navbar.vue';
-
 import logo from '@/components/Logo.vue';
-
+import modal from '@/components/Modal.vue';
 import Login from '@/views/Login.vue';
 import VehicleList from '@/components/VehicleList.vue';
 import SpotList from '@/components/SpotList.vue';
 import Garage from '@/components/Garage.vue';
 import PriceTable from '@/components/PriceTable.vue';
+import ManageBooking from '@/components/ManageBooking.vue';
 
 // Axios
 import axios from 'axios';
@@ -122,84 +125,122 @@ import axios from 'axios';
 // axios.defaults.baseURL = 'http://localhost:4242';
 
 export default {
-  name: 'home',
-  components: {
+	name: 'home',
+	components: {
 		navbar,
 		UserIcon,
 		logo,
-    Login,
+		modal,
+		Login,
 		VehicleList,
 		SpotList,
 		Garage,
-		PriceTable,
-  },
-	created () {
-		navigator.geolocation.watchPosition(
-			(pos) => { 
-				this.currentPosition.lat = pos.coords.latitude;
-				this.currentPosition.lng = pos.coords.longitude;
-				this.getMap(this.currentPosition);
-			},
-		);
-	},
-  data() {
-    return {
-      		showLogin: false,
-			showVehicleList: false,
+    PriceTable,
+    ManageBooking,  
+	},	
+	data() {
+		return {
+			showLogin: false,
+      showVehicleList: false,
+			showManageBooking: false,
 			showSpotList: false,
 			showGarage: false,
 			showPriceTable: false,
 			showCars: false,
 			user: null,
+			token: "",
 			infos: [],
 			markers: [],
-			currentPosition: {lat: -19.9296346, lng:-43.9375731},
+			parkings: [],
+			markerColor: {
+				red: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+				green: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+				blue: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+			},
+			currentPosition: {
+				lat: null, 
+				lng: null,
+			},
 			zoom: 15,
 			circle_radius: 27,
-			area_radius: 1270
-			// markers: [{
-			// 	position: {
-			// 		lat: -19.9296346,
-			// 		lng: -43.9375731,
-			// 	}
-			// }]
-			// center: null,
-    }
-  },
+			area_radius: 1270,
+			isModalVisible: false,
+      selectedParking: {},
+      isPublic: true,
+		}
+	},
+	mounted () {
+		this.getLocation();
+	},
 	methods: {
-		logged(user) {
+    updated(updated_user) {
+      this.user = updated_user;
+    },
+		async logged(user, token) {
 			this.user = user;
+			this.token = token;
+			navigator.geolocation.getCurrentPosition((pos) => {
+				this.currentPosition.lat = pos.coords.latitude;
+				this.currentPosition.lng = pos.coords.longitude;
+      })
+      if (user.cnpj) {
+        this.isPublic = false;
+      }      
+			const result = await this.getMap(this.currentPosition);
+			this.infos = result.infos;
+			this.markers = result.markers;
+    },
+		async selectParking(id) {
+			const response = await this.$http.get(`parkings/?public=${id}`);
+      const park = response.data.filter(n => {
+        return n.id == id;
+      });
+      this.selectedParking = park.pop();
+			this.showModal();
 		},
-
-		create() {
-
+		showModal() {
+			this.isModalVisible = !this.isModalVisible;
 		},
-
+		async getLocation() {
+				navigator.geolocation.getCurrentPosition(async (pos) => {
+				this.currentPosition.lat = pos.coords.latitude;
+				this.currentPosition.lng = pos.coords.longitude;
+				const result = await this.getMap(this.currentPosition);
+				this.infos = result.infos;
+				this.markers = result.markers;
+			},);
+		},
 		getMap (position) {
-			const url = `/api/parking?latitude=${position.lat}&longitude=${position.lng}&radius=${this.area_radius}&format=json`;
+			let url = `parkings/?`;
+			if (position && position.lat && position.lng && this.isPublic) {
+        url += `point=${position.lat},${position.lng}&public=true`;
+      } else if (position && position.lat && position.lng) {
+        url += `point=${position.lat},${position.lng}`;
+      }
 			return axios.get(url)
 				.then(response => {
-					let parkings = response.data;
+					this.parkings = response.data;
 					let markers = []
 					let infos = []
-					for (let parking of parkings) {
+					for (let parking of this.parkings) {
 						if (parking.latitude && parking.longitude) {
 							markers.push({
-								position: {
-									lat: parking.latitude,
-									lng: parking.longitude,
-								}
-							});
-							infos.push({
+								id: parking.id,
 								position: {
 									lat: parking.latitude,
 									lng: parking.longitude,
 								},
-								content: "OLA MUNDO"
+								icon: { url: this.getMarkerColor(parking.available_parking_spots) },
+							});
+							infos.push({
+								id: parking.id,
+								position: {
+									lat: parking.latitude,
+									lng: parking.longitude,
+								},
 							});
 						}
 					}
-
 					return {
 						markers: markers,
 						infos: infos,
@@ -208,12 +249,24 @@ export default {
 					console.log(e);
 				})
 		},
-
 		zoomChanged(event) {
-			console.log(event);
 			this.changeRadius(event);
 		},
-
+		getMarkerColor(spots) {
+			switch (true) {
+				case spots <= 5:					
+					return this.markerColor.red;
+					break;
+				case spots >= 6 && spots <= 15:					
+					return this.markerColor.green;
+					break;
+				case spots >= 16:					
+					return this.markerColor.blue;
+					break;			
+				default: return this.markerColor.red;
+					break;
+			}
+		},
 		changeRadius(zoom){
 			const max = 900000;
 			const area = max * 60;
@@ -240,7 +293,7 @@ export default {
 	cursor: pointer;
 }
 
-.login-container, .vehicle-list-container {
+.custom-container {
   position: absolute;
   top: 0;
   left: 0;
